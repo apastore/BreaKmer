@@ -524,17 +524,21 @@ class BlatResult:
     def set_segment_overlap(self, right, left):
         self.seg_overlap = [left, right]
 
+    @property
     def qstart(self):
         """Query coordinate start"""
         return int(self.alignVals.get_coords('query', 0))
 
+    @property
     def qend(self):
         """Query coordinate end"""
         return int(self.alignVals.get_coords('query', 1))
 
+    @property
     def tstart(self):
         return self.alignVals.get_coords('reference', 0)
 
+    @property
     def tend(self):
         return self.alignVals.get_coords('reference', 1)
 
@@ -681,23 +685,9 @@ class BlatResult:
         """ """
         return self.alignVals.get_coords(alignType)
 
-    # def set_repeats(self, target_rep_mask, all_rep_mask):
-    #     self.rep_man = blat_repeat_manager()
-    #     if self.matches['rep'] > 0:
-    #         self.in_repeat = True
-    #     if target_rep_mask and all_rep_mask:
-    #         # Check rep_mask if it exists.
-    #         rmask = target_rep_mask
-    #         if not self.in_target:
-    #             rmask = None
-    #             if self.vals['hit']['name'] in all_rep_mask:
-    #                 rmask = all_rep_mask[self.vals['hit']['name']]
-    #         if rmask:
-    #             self.rep_man.setup(self.get_coords('hit'), rmask)
-    #             self.in_repeat, self.repeat_overlap, self.repeat_coords, self.filter_reps_edges = self.rep_man.other_values
-
     def in_target_region(self, targetRegionCoordinates):
         """ """
+
         refCoordStart, refCoordEnd = self.get_coords('ref')
         regionStart = targetRegionCoordinates[1] - targetRegionCoordinates[4]
         regionEnd = targetRegionCoordinates[2] + targetRegionCoordinates[4]
@@ -747,76 +737,3 @@ class BlatResult:
             utils.log(self.loggingName, 'info', 'Blat result spans query (%r) or only one blat result (%r) and blat result in target (%r)' % (self.spans_query(), (nBlatResults == 1), self.in_target))
             indel = True
         return indel
-
-        # indel = False
-        # indel_size_thresh = int(self.meta_dict['params'].opts['indel_size'])
-        # self.logger.info('Checking if blat result contains an indel variant')
-        # nhits = 0
-        # for i in self.hit_freq:
-        #     if i > 0:
-        #         nhits += 1
-        # if br.spans_query() or (len(self.blat_results) == 1 and br.in_target):
-        #     self.logger.info('Blat result spans query (%r) or only one blat result (%r) and blat result in target (%r)' % (br.spans_query(), (len(self.blat_results) == 1), br.in_target))
-        #     indel = True
-        #     keep_br = br.valid and br.mean_cov < 2 and br.in_target and (br.indel_maxevent_size[0] >= indel_size_thresh) and (not br.rep_man.breakpoint_in_rep[0] and not br.rep_man.breakpoint_in_rep[1])
-        #     self.logger.debug('Keep blat result %r' % keep_br)
-        #     if keep_br:
-        #         brkpt_cov = [self.meta_dict['contig_vals'][1].get_counts(x, x, 'indel') for x in br.query_brkpts]
-        #         low_cov = min(brkpt_cov) < self.meta_dict['params'].get_sr_thresh('indel')
-        #         flank_match_thresh = True
-        #         for fm in br.indel_flank_match:
-        #             fm_perc = round((float(fm) / float(br.get_size('query'))) * 100, 2)
-        #             if fm_perc < 10.0:
-        #                 flank_match_thresh = False
-        #             self.logger.info('Indel result has matching flanking sequence of largest indel event of %d (%d of query)' % (fm, fm_perc))
-        #         self.logger.info('Indel result has matching flanking sequence of largest indel event (10 perc of query) on both sides (%r)' % flank_match_thresh)
-        #         in_ff, span_ff = filter_by_feature(br.get_brkpt_locs(), self.meta_dict['query_region'], self.meta_dict['params'].opts['keep_intron_vars'])
-        #         if not in_ff and not low_cov and flank_match_thresh:
-        #             self.se = sv_event(br, self.meta_dict['query_region'], self.meta_dict['contig_vals'], self.meta_dict['sbam'])
-        #             self.logger.debug('Top hit contains whole query sequence, indel variant')
-        #         else:
-        #             self.logger.debug('Indel in intron (%r) or low coverage at breakpoints (%r) or minimum segment size < 20 (%r), filtering out.' % (in_ff, low_cov, min(br.query_blocksizes)))
-        #     else:
-        #         self.logger.debug('Indel failed checking criteria: in annotated gene: %r, mean query coverage < 2: %r, in target: %r, in repeat: %r, indel size < %d: %r' % (br.valid, br.mean_cov, br.in_target, ",".join([str(x) for x in br.rep_man.breakpoint_in_rep]), indel_size_thresh, br.indel_maxevent_size[0] < indel_size_thresh))
-        # return indel
-
-
-# class blat_repeat_manager:
-#     def __init__(self):
-#         # Booleans for both breakpoints and whether they land in simple repeats
-#         self.breakpoint_in_rep = [False, False]
-#         self.total_rep_overlap = 0.0
-#         self.simple_rep_overlap = 0.0
-#         self.other_values = [False, 0.0, [], [False, False]]
-
-#     def setup(self, coords, repeat_locs):
-#         self.check_repeat_regions(coords, repeat_locs)
-
-#     def check_repeat_regions(self, coords, repeat_locs):
-#         start, end = coords
-#         seg_len = float(end - start)
-#         in_repeat = False
-#         rep_overlap = 0.0
-#         simple_overlap = 0.0
-#         rep_coords = []
-#         filter_reps_edges = [False, False]
-#         for rloc in repeat_locs:
-#             rchr, rbp1, rbp2, rname = rloc
-#             if (rbp1 >= start and rbp1 <= end) or (rbp2 >= start and rbp2 <= end) or (rbp1 <= start and rbp2 >= end):
-#                 in_repeat = True
-#                 rep_overlap += float(min(rbp2, end) - max(rbp1, start))
-#                 rep_coords.append((rbp1, rbp2))
-#                 # Simple or low complexity seq repeat for filtering
-#                 if rname.find(")n") > -1 or rname.find("_rich") > -1:
-#                     simple_overlap += float(min(rbp2, end) - max(rbp1, start))
-#                     if (rbp1 <= start and rbp2 >= start):
-#                         filter_reps_edges[0] = True
-#                     elif (rbp1 <= end and rbp2 >= end):
-#                         filter_reps_edges[1] = True
-# #        if rep_overlap >= seg_len :
-# #          break
-#         roverlap = round((float(min(rep_overlap, seg_len)) / float(seg_len)) * 100, 2)
-#         self.total_rep_overlap = roverlap
-#         self.simple_rep_overlap = round((float(min(simple_overlap, seg_len)) / float(seg_len)) * 100, 2)
-#         self.breakpoint_in_rep = filter_reps_edges
-#         self.other_values = [in_repeat, roverlap, rep_coords, filter_reps_edges]

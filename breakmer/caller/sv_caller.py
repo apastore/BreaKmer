@@ -479,45 +479,59 @@ class SVBreakpoints:
 
 
 class SVEvent:
-    def __init__(self, blatResult, contig, svType):
+    def __init__(self, realignResult, contig, svType):
+        """Initiate the class to manage the collection of realignment results that define a putative
+        a structural variation event. The object is instantiated with a realignment results which could be
+        the full or partial length from a query contig.
+
+        The segment results are added to this object based on their relignment metrics, the best hits are stored
+        first in the segmentResults list.
+
+        Attributes:
+        """
+
         self.loggingName = 'breakmer.caller.sv_caller'
         self.svType = svType
         self.svSubtype = ''
         self.events = []
-        self.blatResults = []
-        self.blatResultsSorted = []
+        self.segmentResults = []
+        # self.blatResultsSorted = []
         self.annotated = False
         self.qlen = 0
         self.nmatch = 0
         self.in_target = False
         self.contig = contig
-        self.valid = True
-        self.in_rep = True
+        # self.valid = True
+        # self.in_rep = True
         self.querySize = None
         self.queryCoverage = [0] * len(contig.seq)
         self.brkpts = SVBreakpoints()
         self.rearrDesc = None
         self.resultValues = SVResult()
-        self.add(blatResult)
+        self.add(realignResult)
 
-    def add(self, blatResult):
-        queryStartCoord = blatResult.alignVals.get_coords('query', 0)
-        queryEndCoord = blatResult.alignVals.get_coords('query', 1)
-        self.blatResults.append((queryStartCoord, blatResult))
+    def add(self, realignResult):
+        """
+        """
+        # queryStartCoord = realignResult.alignVals.get_coords('query', 0)
+        # queryEndCoord = realignResult.alignVals.get_coords('query', 1)
+        self.segmentResults.append(realignResult)
 
         # Add the number of hits to the query region
-        for i in range(queryStartCoord, queryEndCoord):
+        for i in range(realignResult.qstart, realignResults.qend):
             self.queryCoverage[i] += 1
         if not self.querySize:
-            self.querySize = blatResult.get_seq_size('query')
-        self.qlen += blatResult.get_query_span()
-        self.nmatch += blatResult.get_nmatch_total()
-        self.in_target = self.in_target or blatResult.in_target
-        self.in_rep = self.in_rep and (blatResult.repeat_overlap > 75.0)
-        self.valid = self.valid and blatResult.valid
-        self.blatResultsSorted.append((blatResult, blatResult.get_nmatch_total()))
+            self.querySize = realignResult.get_seq_size('query')
+        self.qlen += realignResult.get_query_span()
+        self.nmatch += realignResult.get_nmatch_total()
+        self.in_target = self.in_target or realignResult.in_target
+        # self.in_rep = self.in_rep and (realignResult.repeat_overlap > 75.0)
+        # self.valid = self.valid and blatResult.valid
+        # self.blatResultsSorted.append((blatResult, blatResult.get_nmatch_total()))
 
     def result_valid(self):
+        """
+        """
         valid = False
         if (len(self.blatResults) > 1) and self.in_target:
             valid = True
@@ -798,18 +812,23 @@ class ContigCaller:
     """
     """
     def __init__(self, realignment, contig, params):
+        """
+
+
+        """
+
+        self.loggingName = 'breakmer.caller.sv_caller'
         self.realignment = realignment
         self.contig = contig
         self.params = params
         self.clippedQs = []
         self.svEvent = None
-        self.loggingName = 'breakmer.caller.sv_caller'
 
     def call_svs(self):
         """ """
 
         if not self.realignment.has_results():
-            utils.log(self.loggingName, 'info', 'No blat results file exists, no calls for %s.' % self.contig.get_id())
+            utils.log(self.loggingName, 'info', 'No blat results file exists, no calls for %s.' % self.contig.id)
         else:
             utils.log(self.loggingName, 'info', 'Making variant calls from blat results %s' % self.realignment.get_result_fn())
             if self.check_indels():
@@ -819,32 +838,44 @@ class ContigCaller:
         return self.svEvent
 
     def check_indels(self):
-        """ """
+        """Iterate over the sorted realignment results to determine if the result contains an indel.
+        The results should be sorted by 1. Alignment score, 2. Percent identity, 3. Number of gaps.
+
+
+        Store all the queries if there are more than one.
+
+        Args:
+            None
+        Returns:
+            hasIndel (boolean):  Indicator if an indel was identified.
+        """
+
         hasIndel = False
-        blatResults = self.realignment.get_blat_results()
-        for i, blatResult in enumerate(blatResults):
-            if i == 0 and blatResult.check_indel(len(blatResults)):
+        sortedRealignResults = self.realignment.get_sorted_realign_results()
+        for i, realignResult in enumerate(sortedRealignResults):
+            if i == 0 and realignResult.check_indel(len(realignResults)):
                 hasIndel = True
                 utils.log(self.loggingName, 'info', 'Contig has indel, returning %r' % hasIndel)
-                self.svEvent = SVEvent(blatResult, self.contig, 'indel')
+                self.svEvent = SVEvent(realignResult, self.contig, 'indel')
                 return hasIndel
             else:
-                utils.log(self.loggingName, 'debug', 'Storing clipped blat result start %d, end %d' % (blatResult.qstart(), blatResult.qend()))
-                self.clippedQs.append((blatResult.qstart(), blatResult.qend(), blatResult, i))
+                utils.log(self.loggingName, 'debug', 'Storing clipped blat result start %d, end %d' % (realignResult.qstart, realignResult.qend))
+                self.clippedQs.append(realignResult)
         utils.log(self.loggingName, 'info', 'Contig does not have indel, return %r' % hasIndel)
         return hasIndel
 
     def check_svs(self):
-        """ """
+        """ 
+        """
+
         utils.log(self.loggingName, 'info', 'Checking for SVs')
-        gaps = [(0, self.realignment.get_qsize())]
+        gaps = [(0, self.realignment.qsize)]
         if len(self.clippedQs) > 1:
             utils.log(self.loggingName, 'debug', 'Iterating through %d clipped blat results.' % len(self.clippedQs))
             mergedClip = [0, None]
-            for i, clippedQs in enumerate(self.clippedQs):
-                qs, qe, blatResult, idx = clippedQs
-                utils.log(self.loggingName, 'debug', 'Blat result with start %d, end %d, chrom %s' % (qs, qe, blatResult.get_seq_name('ref')))
-                gaps = self.iter_gaps(gaps, self.clippedQs[i], i)
+            for i, realignResult in enumerate(self.clippedQs):
+                utils.log(self.loggingName, 'debug', 'Blat result with start %d, end %d, chrom %s' % (realignResult.qstart, realignResult.qend, realignResult.get_seq_name('ref')))
+                gaps = self.iter_gaps(gaps, realignResult, i)
                 if self.svEvent.qlen > mergedClip[0]:
                     mergedClip = [self.svEvent.qlen, self.svEvent]
             self.svEvent = mergedClip[1]
@@ -856,35 +887,35 @@ class ContigCaller:
             self.svEvent = None
             return False
 
-    def iter_gaps(self, gaps, clippedQuerySeqVals, iterIdx):
+    def iter_gaps(self, gaps, realignResult, iterIdx):
         """ """
+
         new_gaps = []
-        qs, qe, blatResult, idx = clippedQuerySeqVals
         hit = False
         for gap in gaps:
-            gs, ge = gap
-            utils.log(self.loggingName, 'debug', 'Gap coords %d, %d' % (gs, ge))
-            startWithinGap = (qs >= gs and qs <= ge)
-            endWithinGap = (qe <= ge and qe >= gs)
-            gapEdgeDistStart = (qs <= gs) and ((gs - qs) < 15)
-            gapEdgeDistEnd = (qe >= ge) and ((qe - ge) < 15)
+            gapStart, gapEnd = gap
+            utils.log(self.loggingName, 'debug', 'Gap coords %d, %d' % (gapStart, gapEnd))
+            startWithinGap = (realignResult.qstart >= gapStart) and (realignResult.qstart <= gapEnd)
+            endWithinGap = (realignResult.qend <= gapEnd) and (realignResult.qend >= gapStart)
+            gapEdgeDistStart = (realignResult.qstart <= gapStart) and ((gapStart - realignResult.qstart) < 15)
+            gapEdgeDistEnd = (realignResult.qend >= gapEnd) and ((realignResult.qend - gapEnd) < 15)
             if startWithinGap or endWithinGap or (gapEdgeDistStart and (endWithinGap or gapEdgeDistEnd)) or (gapEdgeDistEnd and (startWithinGap or gapEdgeDistStart)):
                 ngap = []
-                if qs > gs:
-                    if (qs - 1 - gs) > 10:
-                        ngap.append((gs, qs - 1))
-                if qe < ge:
-                    if (ge - qe + 1) > 10:
-                        ngap.append((qe + 1, ge))
+                if realignResult.qstart > gapStart:
+                    if (realignResult.qstart - 1 - gapStart) > 10:
+                        ngap.append((gapStart, realignResult.qstart - 1))
+                if realignResult.qend < gapEnd:
+                    if (gapEnd - realignResult.qend + 1) > 10:
+                        ngap.append((realignResult.qend + 1, gapEnd))
                 if iterIdx == 0:
-                    utils.log(self.loggingName, 'debug', 'Creating SV event from blat result with start %d, end %d' % (qs, qe))
-                    self.svEvent = SVEvent(blatResult, self.contig, 'rearrangement')
+                    utils.log(self.loggingName, 'debug', 'Creating SV event from blat result with start %d, end %d' % (realignResult.qstart, realignResult.qend))
+                    self.svEvent = SVEvent(realignResult, self.contig, 'rearrangement')
                     new_gaps.extend(ngap)
                     hit = True
-                elif self.check_add_br(qs, qe, gs, ge, blatResult):
+                elif self.check_add_br(realignResult.qstart, realignResult.qend, gapStart, gapEnd, realignResult):
                     utils.log(self.loggingName, 'debug', 'Adding blat result to event')
                     new_gaps.extend(ngap)
-                    self.svEvent.add(blatResult)
+                    self.svEvent.add(realignResult)
                     hit = True
                 else:
                     new_gaps.append(gap)
@@ -892,28 +923,33 @@ class ContigCaller:
                 new_gaps.append(gap)
             utils.log(self.loggingName, 'debug', 'New gap coords %s' % (",".join([str(x) for x in new_gaps])))
         if not hit:
-            self.svEvent.check_previous_add(blatResult)
+            self.svEvent.check_previous_add(realignResult)
         return new_gaps
 
-    def check_add_br(self, qs, qe, gs, ge, blatResult):
-        """ """
-        utils.log(self.loggingName, 'info', 'Checking to add blat result with start %d, end %d' % (qs, qe))
+    def check_add_br(self, realignResult, gapStart, gapEnd):
+        """
+        """
+
+        utils.log(self.loggingName, 'info', 'Checking to add blat result with start %d, end %d' % (realignResult.qstart, realignResult.qend))
         add = False
         # Calc % of segment overlaps with gap
-        over_perc = round((float(min(qe, ge) - max(qs, gs)) / float(qe - qs)) * 100)
+        overlapPecent = round((float(min(realignResult.qend, gapEnd) - max(realignResult.qstart, gapStart)) / float(realignResult.qend - realignResult.qstart)) * 100)
         # Check overlap with other aligned segments
-        ov_right = 0
-        if qe > ge:
-            ov_right = abs(qe - ge)
-        ov_left = 0
-        if qs < gs:
-            ov_left = abs(qs - gs)
-        blatResult.set_segment_overlap(ov_left, ov_right)
-        max_seg_overlap = max(ov_right, ov_left)
-        utils.log(self.loggingName, 'debug', 'Blat query segment overlaps gap by %f' % over_perc)
-        utils.log(self.loggingName, 'debug', 'Max segment overlap %f' % max_seg_overlap)
-        utils.log(self.loggingName, 'debug', 'Event in target %r and blat result in target %r' % (self.svEvent.in_target, blatResult.in_target))
-        if over_perc >= 50 and (max_seg_overlap < 15 or (blatResult.in_target and self.svEvent.in_target)):
+        overlapRight = 0
+        if realignResult.qend > gapEnd:
+            overlapRight = abs(realignResult.qend - gapEnd)
+        overlapLeft = 0
+        if realignResult.qstart < gapStart:
+            overlapLeft = abs(realignResult.qstart - gapStart)
+
+        realignResult.set_segment_overlap(overlapLeft, overlapRight)
+        maxSegmentOverlap = max(overlapRight, overlapLeft)
+
+        utils.log(self.loggingName, 'debug', 'Blat query segment overlaps gap by %f' % overlapPecent)
+        utils.log(self.loggingName, 'debug', 'Max segment overlap %f' % maxSegmentOverlap)
+        utils.log(self.loggingName, 'debug', 'Event in target %r and blat result in target %r' % (self.svEvent.in_target, realignResult.in_target))
+
+        if overlapPecent >= 50 and (maxSegmentOverlap < 15 or (realignResult.in_target and self.svEvent.in_target)):
             add = True
         utils.log(self.loggingName, 'debug', 'Add blat result to SV event %r' % add)
         return add

@@ -78,17 +78,18 @@ class RealignManager:
         """ """
         return self.realignment.has_results()
 
-    def get_blat_results(self):
+    def get_sorted_realign_results(self):
         """
         """
-        return self.realignment.get_blat_results()
+        return self.realignment.get_sorted_results()
 
     def store_clipped_queryseq(self, blatResultValues):
         """
         """
         self.realignment.store_clipped_queryseq(blatResultValues)
 
-    def get_qsize(self):
+    @property
+    def qsize(self):
         """ """
         return self.realignment.results.querySize
 
@@ -168,10 +169,10 @@ class Realignment:
         # this effectively prevents a genome alignment.
         return self.targetHit or noAlignmentResults
 
-    def get_blat_results(self):
+    def get_sorted_results(self):
         """
         """
-        return self.results.sortedResults
+        return self.results.get_sorted_results()  # sortedResults
 
     def store_clipped_queryseq(self, blatResultValues):
         self.clippedQs.append(blatResultValues)
@@ -203,7 +204,7 @@ class AlignResults:
         self.ngaps = 0
         self.hasResults = True
         self.results = []
-        self.sortedResults = []
+        # self.sortedResults = []
         self.clippedQs = []
         self.contig = contig
         self.alignRefFn = alignRefFn
@@ -297,13 +298,13 @@ class AlignResults:
             parsedResult.in_target_region(self.contig.get_target_region_coordinates())
             # parsedBlatResult.set_gene_annotations(self.contig.get_target_region_coordinates(), self.contig.get_gene_annotations())
             # parsedBlatResult.set_repeats(self.contig.get_repeat_annotations())
-            self.process_blat_result(parsedResult)
+            self.process_realignment_result(parsedResult)
             self.results.append(parsedResult)
         # Update to use class attributes as sorting categories
-        self.sortedResults = sorted(self.results, key=lambda x: (-x.alignScore, -x.perc_ident, x.get_total_num_gaps()))
+        # self.sortedResults = sorted(self.results, key=lambda x: (-x.alignScore, -x.perc_ident, x.get_total_num_gaps()))
 
-        for i, blatResult in enumerate(self.sortedResults):
-            blatResult.set_mean_cov(self.get_mean_cov(blatResult.qstart(), blatResult.qend()))
+        for realignResult in self.results:
+            realignResult.set_mean_cov(self.get_mean_cov(realignResult.qstart, realignResult.qend))
 
         if len(self.results) == 0:
             self.hasResults = False
@@ -411,15 +412,16 @@ class AlignResults:
         lResult['blockSizes'] += rResult['blockSizes']
         return lResult
 
-    def process_blat_result(self, blatResultObj):
+    def process_realignment_result(self, realignment):
         """Summarize metrics from all alignments.
         """
-        self.nmismatches += blatResultObj.get_nmatches('mismatch')
-        self.ngaps += blatResultObj.get_total_num_gaps()
+
+        self.nmismatches += realignment.get_nmatches('mismatch')
+        self.ngaps += realignment.get_total_num_gaps()
         if not self.querySize:
-            self.querySize = blatResultObj.get_seq_size('query')
+            self.querySize = realignment.get_seq_size('query')
             self.alignmentFreq = [0] * self.querySize
-        for i in range(blatResultObj.qstart(), blatResultObj.qend()):
+        for i in range(realignment.qstart(), realignment.qend()):
             self.alignmentFreq[i] += 1
 
     def get_query_coverage(self):
@@ -431,3 +433,7 @@ class AlignResults:
 
     def get_mean_cov(self, s, e):
         return float(sum(self.alignmentFreq[s:e])) / float(len(self.alignmentFreq[s:e]))
+
+    def get_sorted_results(self):
+        sortedResults = sorted(self.results, key=lambda x: (-x.alignScore, -x.perc_ident, x.get_total_num_gaps()))
+        return sortedResults

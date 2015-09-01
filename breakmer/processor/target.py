@@ -200,9 +200,9 @@ class Variation:
         the cleaned reads into new files.
 
         Cutadapt is run to trim the adapter sequences from the sequence reads to
-        remove any 'noise' from the assembly process. The cleaned reads output 
-        from cutadapt are then reprocessed to determine if the softclipped sequences 
-        were trimmed off or not to further filter out reads. 
+        remove any 'noise' from the assembly process. The cleaned reads output
+        from cutadapt are then reprocessed to determine if the softclipped sequences
+        were trimmed off or not to further filter out reads.
 
         The softclipped sequences that remain are stored and a new fastq file is written.
 
@@ -625,11 +625,10 @@ class TargetManager:
             None
         """
 
-        iter = 1
         contigs = self.variation.kmers['clusters']
         utils.log(self.loggingName, 'info', 'Resolving structural variants from %d kmer clusters' % len(contigs))
-        for contig in contigs:
-            contigId = self.name + '_contig' + str(iter)
+        for i, contig in enumerate(contigs):
+            contigId = self.name + '_contig' + str(i + 1)
             utils.log(self.loggingName, 'info', 'Assessing contig %s, %s' % (contigId, contig.seq))
             contig.set_meta_information(contigId, self.params, self.values, self.paths['contigs'], self.variation.files['kmer_clusters'], self.variation)
             contig.query_ref(self.files['target_ref_fn'])
@@ -641,7 +640,6 @@ class TargetManager:
                 self.add_result(contig.svEventResult)
             else:
                 utils.log(self.loggingName, 'info', '%s has no structural variant result.' % contigId)
-            iter += 1
         self.variation.cluster_discreads(self.name, self.chrom)  # Cluster discordant reads.
 
     def complete_analysis(self):
