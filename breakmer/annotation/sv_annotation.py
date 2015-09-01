@@ -68,9 +68,15 @@ class Transcript:
         os.remove(outFn)
 
 
-def annotate_event(svEventResult, contigMeta):
-    """ """
-    svEventResult.annotated = True
+def annotate_event(svEvent, contigMeta):
+    """Function called from breakmer.assembly.contig to annotate a SVEvent with genomic
+    features.
+
+    Args:
+        svEvent (breakmer.caller.sv_caller.SVEvent):  SVEvent object containing the results from a realignment.
+    """
+
+    svEvent.annotated = True
     # Make sure annotation file is sorted for bedtools use.
     bedtools = contigMeta.params.get_param('bedtools')
     annotationFn = contigMeta.params.get_param('gene_annotation_file')
@@ -80,57 +86,27 @@ def annotate_event(svEventResult, contigMeta):
     # Deletions have two breakpoints in reference.
     # Insertions have one breakpoint in reference.
     # Rearrangements have breakpoints for each segment that is rearranged.
-    #  genomicBrkpts = svEventResult.get_genomic_brkpts()
-    bpMap = write_brkpt_bed_file(brkptBedFn, svEventResult.blatResults)
+    # genomicBrkpts = svEvent.get_genomic_brkpts()
+    bpMap = write_brkpt_bed_file(brkptBedFn, svEvent.get_segment_results(True))
     # print 'sv_annotation.py bpMap', bpMap
     outputFiles = run_bedtools(bedtools, annotationFn, brkptBedFn, contigMeta.path)
     trxMap = parse_bedtools_output(outputFiles)
     store_annotations(bpMap, trxMap, annotationFn, contigMeta.params, contigMeta.path)
     # Remove temporary bedtools output files.
-    # print 'annotate_event, sv_annotation.py', svEventResult
-    # svEventResult.set_annotations()
-    # print 'svEvent annotated', svEventResult.annotated
+    # print 'annotate_event, sv_annotation.py', svEvent
+    # svEvent.set_annotations()
+    # print 'svEvent annotated', svEvent.annotated
 
 
-def store_annotations(bpMap, trxMap, annotationFn, params, tmpFilePath):
-    for bpKey in bpMap:
-        blatResult, svBrkptIdx, coordIdx = bpMap[bpKey]
-        # print 'sv_annotation store_annotations', bpKey, bpMap[bpKey]
-        if bpKey not in trxMap:
-            print 'Missing a breakpoint annotation', bpKey
-        else:
-            svBreakpoint = blatResult.get_sv_brkpts()[svBrkptIdx]
-            trxMappings = trxMap[bpKey]
-            intersect = trxMap[bpKey]['intersect']
-            upstream = trxMap[bpKey]['upstream']
-            downstream = trxMap[bpKey]['downstream']
-            # print 'Intersect', intersect
-            # print 'Downstream', downstream
-            # print 'Upstream', upstream
-            if intersect is not None:
-                trx, dist = intersect
-                if params.get_param('generate_image') or True:
-                    trx.get_exons(annotationFn, tmpFilePath)
-                # print blatResult, blatResult.get_sv_brkpts()
-                blatResult.get_sv_brkpts()[svBrkptIdx].store_annotation([trx], [dist], coordIdx)
-            else:
-                upTrx, upDist = upstream
-                downTrx, downDist = downstream
-                # print 'Up', upTrx.id, upDist
-                # print 'Down', downTrx.id, downDist
-                if params.get_param('generate_image') or True:
-                    upTrx.get_exons(annotationFn, tmpFilePath)
-                    downTrx.get_exons(annotationFn, tmpFilePath)
-                blatResult.get_sv_brkpts()[svBrkptIdx].store_annotation([upTrx, downTrx], [upDist, downDist], coordIdx)
+def write_brkpt_bed_file(bpBedFn, queryCoordinateSortedResults):
+    """
+    """
 
-
-def write_brkpt_bed_file(bpBedFn, blatResults):
-    """ """
     bpMap = {}
     bpBedFile = open(bpBedFn, 'w')
     bpIter = 1
-    for queryStartCoord, blatResult in blatResults:
-        svBreakpoints = blatResult.get_sv_brkpts()
+    for segmentResult in queryCoordinateSortedResults:
+        svBreakpoints = segmentResult.get_sv_brkpts()
         svBrkptIdx = 0
         for svBreakpoint in svBreakpoints:
             chrom = svBreakpoint.chrom
@@ -143,7 +119,7 @@ def write_brkpt_bed_file(bpBedFn, blatResults):
                 # print 'write_brkpt_bed_file', bpKey
                 bpStr = [chrom, coord, int(coord) + 1, bpKey]
                 bpBedFile.write('\t'.join([str(x) for x in bpStr]) + '\n')
-                bpMap[bpKey] = (blatResult, svBrkptIdx, coordIdx)
+                bpMap[bpKey] = (segmentResult, svBrkptIdx, coordIdx)
                 coordIdx += 1
             svBrkptIdx += 1
         bpIter += 1
@@ -174,6 +150,41 @@ def run_bedtools(bedtools, annotationFn, brkptBedFn, tmpFilePath):
     cmd = 'cat ' + annotationFn + " | awk '" + trxSelect + "' | grep '" + knownGeneSelect + "' | " + bedtools + ' closest -D a -iu -a %s -b - > %s' % (brkptBedFn, outputFiles['downstream'])
     os.system(cmd)
     return outputFiles
+
+
+def store_annotations(bpMap, trxMap, annotationFn, params, tmpFilePath):
+    """
+    """
+
+    for bpKey in bpMap:
+        blatResult, svBrkptIdx, coordIdx = bpMap[bpKey]
+        # print 'sv_annotation store_annotations', bpKey, bpMap[bpKey]
+        if bpKey not in trxMap:
+            print 'Missing a breakpoint annotation', bpKey
+        else:
+            svBreakpoint = blatResult.get_sv_brkpts()[svBrkptIdx]
+            trxMappings = trxMap[bpKey]
+            intersect = trxMap[bpKey]['intersect']
+            upstream = trxMap[bpKey]['upstream']
+            downstream = trxMap[bpKey]['downstream']
+            # print 'Intersect', intersect
+            # print 'Downstream', downstream
+            # print 'Upstream', upstream
+            if intersect is not None:
+                trx, dist = intersect
+                if params.get_param('generate_image') or True:
+                    trx.get_exons(annotationFn, tmpFilePath)
+                # print blatResult, blatResult.get_sv_brkpts()
+                blatResult.get_sv_brkpts()[svBrkptIdx].store_annotation([trx], [dist], coordIdx)
+            else:
+                upTrx, upDist = upstream
+                downTrx, downDist = downstream
+                # print 'Up', upTrx.id, upDist
+                # print 'Down', downTrx.id, downDist
+                if params.get_param('generate_image') or True:
+                    upTrx.get_exons(annotationFn, tmpFilePath)
+                    downTrx.get_exons(annotationFn, tmpFilePath)
+                blatResult.get_sv_brkpts()[svBrkptIdx].store_annotation([upTrx, downTrx], [upDist, downDist], coordIdx)
 
 
 def parse_bedtools_file(fn, fileKey, trxMap):

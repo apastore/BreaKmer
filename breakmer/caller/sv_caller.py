@@ -483,6 +483,12 @@ class SVBreakpoints:
 
 
 class SVEvent:
+    """
+
+    Attributes:
+        loggingName (str):
+
+    """
     def __init__(self, realignResult, contig, svType):
         """Initiate the class to manage the collection of realignment results that define a putative
         a structural variation event. The object is instantiated with a realignment results which could be
@@ -491,14 +497,13 @@ class SVEvent:
         The segment results are added to this object based on their relignment metrics, the best hits are stored
         first in the segmentResults list.
 
-        Attributes:
         """
 
         self.loggingName = 'breakmer.caller.sv_caller'
         self.svType = svType
         self.svSubtype = ''
         self.events = []
-        self.segmentResults = []
+        self.segmentResults = []  # These results are stored from best alignmnet to worst alignment.
         # self.blatResultsSorted = []
         self.annotated = False
         self.qlen = 0
@@ -517,6 +522,7 @@ class SVEvent:
     def add(self, realignResult):
         """
         """
+
         # queryStartCoord = realignResult.alignVals.get_coords('query', 0)
         # queryEndCoord = realignResult.alignVals.get_coords('query', 1)
         self.segmentResults.append(realignResult)
@@ -533,6 +539,24 @@ class SVEvent:
         # self.valid = self.valid and blatResult.valid
         # self.blatResultsSorted.append((blatResult, blatResult.get_nmatch_total()))
 
+    def get_segment_results(self, queryCoordinateSorted=False):
+        """Return the realignment segment results stored in self.segmentResults.
+        The results are return as they are stored, alignment score high to low. Or, they
+        can be sorted by segment start query coordinate (i.e., the first segment of the contig, followed
+        by the second segment.)
+
+        Args:
+            queryCoordinateSorted (boolean):  Indicate whether to sort the segments in the results list based
+                                                on the segment start in the query sequence.
+        Returns:
+            results (List<breakmer.caller.realignment.blat_result>):  A list of realignment result objects.
+        """
+
+        if not queryCoordinateSorted:
+            return self.segmentResults
+        else:
+            return sorted(self.segmentResults, key=lambda x: x.qstart)
+
     def result_valid(self):
         """
         """
@@ -542,7 +566,8 @@ class SVEvent:
         return valid
 
     def has_annotations(self):
-        """ """
+        """
+        """
         return True
 
     def get_genomic_brkpts(self):
@@ -551,6 +576,9 @@ class SVEvent:
         return self.brkpts.genomicBrkpts
 
     def check_previous_add(self, br):
+        """
+        """
+
         ncoords = br.get_coords('query')
         prev_br, prev_nmatch = self.blatResultsSorted[-1]
         prev_coords = prev_br.get_coords('query')
@@ -702,7 +730,9 @@ class SVEvent:
         return rearrValues
 
     def define_rearr(self):
-        """ """
+        """
+        """
+
         varReads = self.contig.get_var_reads('sv')
         strands = self.resultValues.strands
         brkpts = self.brkpts.r
@@ -750,6 +780,7 @@ class SVEvent:
     def get_max_meanCoverage(self):
         """Return the highest mean hit frequency among all blat results stored.
         """
+
         maxMeanCov = 0
         for blatResult, nBasesAligned in self.blatResultsSorted:
             if int(blatResult.meanCov) > int(maxMeanCov):
@@ -758,6 +789,7 @@ class SVEvent:
     def check_read_strands(self):
         """
         """
+
         same_strand = False
         strands = []
         for read in self.contig.reads:
@@ -788,6 +820,7 @@ class SVEvent:
         """Calculate the percentage of the contig sequence that is not realigned to the reference, only examining the
         beginning and end of the contig sequence.
         """
+
         missingCov = 0
         for i in self.queryCoverage:
             if i == 0:
@@ -804,21 +837,35 @@ class SVEvent:
         return percentMissing
 
     def is_filtered(self):
-        """"""
+        """
+        """
         return self.resultValues.is_filtered()
 
     def set_annotations(self):
-        """ """
+        """
+        """
         self.annotated = True
 
 
 class ContigCaller:
+    """A class to manage the exchange between a realignment file and the formation of an SVEvent object.
+
+    Attributes:
+        loggingName (str):
+        realignment (breakmer.realignment.realigner.RealignManager):
+        contig (breakmer.assembly.contig.Contig):
+        params (breakmer.params):
+        clippedQs (List):
+        svEvent (breakmer.caller.sv_caller.SVEvent):
     """
-    """
+
     def __init__(self, realignment, contig, params):
-        """
+        """Init function for ContigCaller class.
 
-
+        Args:
+            realignment (breakmer.realignment.realigner.RealignManager):
+            contig (breakmer.assembly.contig.Contig):
+            params (breakmer.params):
         """
 
         self.loggingName = 'breakmer.caller.sv_caller'
@@ -829,7 +876,19 @@ class ContigCaller:
         self.svEvent = None
 
     def call_svs(self):
-        """ """
+        """Function to call other functions to process the raw results into an SVEvent object.
+
+        It first checks if there is an indel in the target region. If no indel, then check for a
+        rearrangement event.
+
+        If a call is made, then the results are formatted into the SVResult object that is an attribute of
+        the SVEvent.
+
+        Args:
+            None
+        Returns:
+            self.svEvent (breakmer.caller.sv_caller.SVEvent): A SVEvent object to store all the results supporting an event.
+        """
 
         if not self.realignment.has_results():
             utils.log(self.loggingName, 'info', 'No blat results file exists, no calls for %s.' % self.contig.id)
@@ -844,7 +903,6 @@ class ContigCaller:
     def check_indels(self):
         """Iterate over the sorted realignment results to determine if the result contains an indel.
         The results should be sorted by 1. Alignment score, 2. Percent identity, 3. Number of gaps.
-
 
         Store all the queries if there are more than one.
 
@@ -892,7 +950,8 @@ class ContigCaller:
             return False
 
     def iter_gaps(self, gaps, realignResult, iterIdx):
-        """ """
+        """
+        """
 
         new_gaps = []
         hit = False

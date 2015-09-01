@@ -481,13 +481,15 @@ class Builder:
     def read_overlap_contig(self, alignment, query_read, nreads, kmer_seqs, type):
         """Assemble consensus and read sequences togheter, where the consensus
         beginning overlaps the read sequence end.
+
         Args:
             alignment: olc.Align object
             query_read: fq_read object
             nreads: Integer for number of reads to add to count vectors.
             kmer_seqs: Set of kmer sequence values.
             type: String for source of call to function.
-        Return: None
+        Returns:
+            None
         """
 
         if alignment.prej == len(query_read.seq) and alignment.j == 0:
@@ -661,6 +663,9 @@ class Meta:
         blat_f.close()
 
     def write_result(self, svEventResult, outputPath):
+        """
+        """
+
         resultFn = os.path.join(self.path, self.id + "_svs.out")
         utils.log(self.loggingName, 'info', 'Writing %s result file %s' % (self.id, resultFn))
         resultFile = open(resultFn, 'w')
@@ -672,6 +677,9 @@ class Meta:
         shutil.copyfile(resultFn, os.path.join(outputPath, self.id + "_svs.out"))
 
     def write_bam(self, outputPath, svBamReadsFn, reads):
+        """
+        """
+
         bamOutFn = os.path.join(outputPath, self.id + "_reads.bam")
         utils.log(self.loggingName, 'info', 'Writing contig reads bam file %s' % bamOutFn)
         bam_out_sorted_fn = os.path.join(outputPath, self.id + "_reads.sorted.bam")
@@ -695,10 +703,11 @@ class Meta:
 class Contig:
     """Interface class to assemble a contig and store data all the relevant data
     for the assembly.
+
     Attributes:
-        meta:       Meta class object to store all the interface related data.
-        kmer_locs:  List of integers indicating the start alignment position of the kmers
-                    in the contig sequence.
+        meta (breakmer.assembly.contig.Meta):   Meta class object to store all the interface related data.
+        kmer_locs (List):                       List of integers indicating the start alignment position of the kmers
+                                                in the contig sequence.
         setup:      Boolean to indicate whether a contig has gone through the setup process.
         build:      Builder class object that handles all the assembly functions.
         seq:        String for assembled sequence.
@@ -708,6 +717,9 @@ class Contig:
     """
 
     def __init__(self, kmerObj, readAlignValues):
+        """
+        """
+
         self.meta = Meta()
         self.setup = False
         self.builder = Builder(kmerObj, readAlignValues)
@@ -716,7 +728,7 @@ class Contig:
         self.kmer_locs = []
         self.reads = set()
         self.buffer = set([readAlignValues['read'].id])
-        self.svEventResult = None
+        self.svEvent = None
         self.realignment = None
 
     def check_read(self, kmerObj, readAlignValues, fncType='setup'):
@@ -901,28 +913,28 @@ class Contig:
         """
         """
         contigCaller = sv_caller.ContigCaller(self.realignment, self, self.meta.params)
-        self.svEventResult = contigCaller.call_svs()
+        self.svEvent = contigCaller.call_svs()
 
     def filter_calls(self):
         """
         """
-        if self.svEventResult is not None:
+        if self.svEvent is not None:
             svFilter = self.meta.params.filter
-            svFilter.check_filters(self.svEventResult)
+            svFilter.check_filters(self.svEvent)
 
     def annotate_calls(self):
         """ """
-        if self.svEventResult and self.meta.params.get_param('gene_annotation_file') and self.meta.params.get_param('bedtools'):
-            annotator.annotate_event(self.svEventResult, self.meta)
+        if self.svEvent and self.meta.params.get_param('gene_annotation_file') and self.meta.params.get_param('bedtools'):
+            annotator.annotate_event(self.svEvent, self.meta)
 
     def output_calls(self, outputPath, svReadsBamFn):
         """ """
-        if self.svEventResult:
-            self.meta.write_result(self.svEventResult, outputPath)
+        if self.svEvent:
+            self.meta.write_result(self.svEvent, outputPath)
             readBamFn = self.meta.write_bam(outputPath, svReadsBamFn, self.reads)
-            if self.meta.params.get_param('generate_image') and not self.svEventResult.is_filtered():
+            if self.meta.params.get_param('generate_image') and not self.svEvent.is_filtered():
                 # Generate image if option is set and the result is not being filtered out.
-                svplotter.generate_pileup_img(self.svEventResult, readBamFn, outputPath, self.get_id())
+                svplotter.generate_pileup_img(self.svEvent, readBamFn, outputPath, self.get_id())
 
     def get_total_read_support(self):
         """Return the total read count supporting assembly."""
